@@ -9,5 +9,6 @@ Provides unified interface for vector storage operations including:
 """
 
 from .qdrant_vector_store import QdrantVectorStore
+from .faiss_vector_store import FAISSVectorStore
 
-__all__ = ['QdrantVectorStore']
+__all__ = ['QdrantVectorStore', 'FAISSVectorStore']

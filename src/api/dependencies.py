@@ -41,10 +41,10 @@ def get_retrieval_system():
     """Get singleton retrieval system instance."""
     global _retrieval_system_instance
     if _retrieval_system_instance is None:
-        from ..retrieval.retrieval_system import MultimodalRetrievalSystem
+        from ..pipeline.embedding_pipeline import EmbeddingPipeline
         config = get_config()
-        _retrieval_system_instance = MultimodalRetrievalSystem(config)
-        logger.info("Created singleton retrieval system instance")
+        _retrieval_system_instance = EmbeddingPipeline(config)
+        logger.info("Created singleton embedding pipeline instance")
     return _retrieval_system_instance
 
 def get_document_processor():
@@ -83,13 +83,13 @@ def get_document_processor():
                 self.router = router
             
             async def process_file(self, file_path: str) -> ProcessingResult:
-                """Process file using real document router and index to retrieval system."""
+                """Process file using embedding pipeline."""
                 try:
-                    # Use the shared retrieval system instance for both processing and indexing
-                    retrieval_system = get_retrieval_system()
+                    # Use the embedding pipeline for complete processing
+                    pipeline = get_retrieval_system()
                     
-                    # Use the retrieval system's add_document method which handles both processing and indexing
-                    result = retrieval_system.add_document(file_path)
+                    # Process document through the pipeline: chunk → embed → store
+                    result = pipeline.process_document(file_path)
                     return result
                 except Exception as e:
                     logger.error(f"Error processing file {file_path}: {e}")
@@ -263,13 +263,11 @@ def get_semantic_retriever():
                 try:
                     # Extract search parameters
                     similarity_threshold = kwargs.get('similarity_threshold', 0.5)
-                    content_types = kwargs.get('content_types', None)
                     
-                    # Perform search using the retrieval system
-                    results = self.retrieval_system.search(
+                    # Perform search using the embedding pipeline
+                    results = self.retrieval_system.search_with_text(
                         query=query,
                         top_k=k,
-                        content_types=content_types,
                         similarity_threshold=similarity_threshold
                     )
                     
