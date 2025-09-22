@@ -35,7 +35,7 @@ def get_config() -> SystemConfig:
     if _config_manager is None:
         _config_manager = ConfigManager()
     
-    return _config_manager.config
+    return _config_manager.get_config()
 
 def get_retrieval_system():
     """Get singleton retrieval system instance."""
