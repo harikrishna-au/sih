@@ -6,6 +6,9 @@ using Qdrant vector database. Supports unified embedding space for cross-modal r
 """
 
 import logging
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../..")))
 from typing import List, Dict, Any, Optional, Tuple
 import uuid
 from pathlib import Path
@@ -459,77 +462,69 @@ class QdrantVectorStore:
             return {}
 
 
-def create_vector_store_example():
+
+# New function to load all embeddings from the local 'embeddings' folder and store them in Qdrant
+def load_and_store_local_embeddings():
     """
-    Example usage of QdrantVectorStore with text and image embeddings.
+    Loads all .npy embedding files from the local 'cache/embeddings' folder and stores them in Qdrant.
+    Each file should contain a numpy array of shape (n_chunks, embedding_dim) or (embedding_dim,).
+    Metadata for each embedding can be loaded from a corresponding .json file if available.
     """
-    from ...config import StorageConfig, EmbeddingConfig, SystemConfig
-    
-    # Load configuration
+    from src.config import SystemConfig
+    import json
+
     config = SystemConfig()
-    
-    # Create vector store
     vector_store = QdrantVectorStore(
         storage_config=config.storage,
         embedding_config=config.embedding
     )
-    
-    # Example documents
-    documents = [
-        {
-            "id": "doc1",
-            "content": "FinPilot is an AI-powered financial assistant for tax optimization.",
-            "content_type": ContentType.TEXT,
-            "file_path": "documents/finpilot.txt"
-        },
-        {
-            "id": "doc2", 
-            "content": "MindMate-AI helps professionals manage stress using CBT techniques.",
-            "content_type": ContentType.TEXT,
-            "file_path": "documents/mindmate.txt"
-        },
-        {
-            "id": "doc3",
-            "content": "Qdrant is an open-source vector search engine for embeddings.",
-            "content_type": ContentType.TEXT,
-            "file_path": "documents/qdrant.txt"
-        }
-    ]
-    
-    # Create content chunks
-    chunks = []
-    for doc in documents:
-        chunk = ContentChunk(
-            chunk_id=f"{doc['id']}_chunk_001",
-            document_id=doc["id"],
-            content=doc["content"],
-            content_type=doc["content_type"],
-            source_location=SourceLocation(file_path=doc["file_path"]),
-            metadata={"source": "example"}
-        )
-        chunks.append(chunk)
-    
-    # Add chunks to vector store
-    vector_store.add_chunks(chunks)
-    
-    # Search examples
-    print("\n🔎 Text Search Results:")
-    text_results = vector_store.search("Which project helps with mental health?", top_k=2)
-    for result in text_results:
-        print(f"- {result.content} (score: {result.similarity_score:.3f})")
-    
-    print("\n🔎 Cross-modal Search Results:")
-    cross_results = vector_store.search_cross_modal("AI financial assistant", top_k=3)
-    for result in cross_results:
-        print(f"- {result.content} (type: {result.content_type.value}, score: {result.similarity_score:.3f})")
-    
-    # Get statistics
-    stats = vector_store.get_statistics()
-    print(f"\n📊 Vector Store Statistics:")
-    print(f"- Total points: {stats.get('points_count', 0)}")
-    print(f"- Vector size: {stats.get('vector_size', 0)}")
-    print(f"- Content types: {stats.get('content_type_distribution', {})}")
+
+    embeddings_dir = Path("cache/embeddings")
+    npy_files = list(embeddings_dir.glob("*.npy"))
+    print(f"Found {len(npy_files)} embedding files in {embeddings_dir}")
+
+    for npy_file in npy_files:
+        embeddings = np.load(npy_file)
+        # Try to load metadata from a .json file with the same name
+        meta_file = npy_file.with_suffix('.json')
+        if meta_file.exists():
+            with open(meta_file, 'r', encoding='utf-8') as f:
+                metas = json.load(f)
+        else:
+            metas = [{} for _ in range(len(embeddings) if embeddings.ndim == 2 else 1)]
+
+        chunks = []
+        if embeddings.ndim == 1:
+            # Single embedding
+            chunk = ContentChunk(
+                chunk_id=str(npy_file.stem),
+                document_id=str(npy_file.stem),
+                content=f"Embedding from {npy_file.name}",
+                content_type=ContentType.TEXT,
+                source_location=SourceLocation(file_path=str(npy_file)),
+                embedding=embeddings,
+                metadata=metas[0] if metas else {}
+            )
+            chunks.append(chunk)
+        else:
+            # Multiple embeddings
+            for i, emb in enumerate(embeddings):
+                chunk = ContentChunk(
+                    chunk_id=f"{npy_file.stem}_{i}",
+                    document_id=str(npy_file.stem),
+                    content=f"Embedding {i} from {npy_file.name}",
+                    content_type=ContentType.TEXT,
+                    source_location=SourceLocation(file_path=str(npy_file)),
+                    embedding=emb,
+                    metadata=metas[i] if i < len(metas) else {}
+                )
+                chunks.append(chunk)
+
+        vector_store.add_chunks(chunks)
+        print(f"Stored {len(chunks)} embeddings from {npy_file.name}")
+
+    print("All local embeddings loaded and stored in Qdrant.")
 
 
 if __name__ == "__main__":
-    create_vector_store_example()
+    load_and_store_local_embeddings()

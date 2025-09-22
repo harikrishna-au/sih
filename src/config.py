@@ -32,7 +32,7 @@ class ProcessingConfig:
 class EmbeddingConfig:
     """Configuration for embedding generation."""
     text_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
-    image_model_name: str = "openai/clip-vit-base-patch32"
+    image_model_name: str = "ViT-B/32"
     embedding_dimension: int = 384
     batch_size: int = 32
     normalize_embeddings: bool = True

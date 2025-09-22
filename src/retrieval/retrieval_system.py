@@ -403,76 +403,51 @@ class MultimodalRetrievalSystem:
             raise
 
 
-def create_retrieval_system_example():
+
+# New interactive terminal mode for retrieval system
+def interactive_terminal_retrieval():
     """
-    Example usage of MultimodalRetrievalSystem.
+    Runs the retrieval system in interactive terminal mode.
+    Loads embeddings from Qdrant and lets the user ask questions.
     """
     from ..config import SystemConfig
-    
-    # Initialize system
+
     config = SystemConfig()
     retrieval_system = MultimodalRetrievalSystem(config)
-    
-    # Example documents (you would add real files here)
-    example_docs = [
-        "FinPilot is an AI-powered financial assistant for tax optimization and investment advice.",
-        "MindMate-AI helps professionals manage stress using evidence-based CBT techniques.",
-        "Qdrant is an open-source vector search engine optimized for embeddings and ML applications."
-    ]
-    
-    # Create temporary files for demonstration
-    import tempfile
-    import os
-    
-    temp_files = []
-    try:
-        for i, content in enumerate(example_docs):
-            temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
-            temp_file.write(content)
-            temp_file.close()
-            temp_files.append(temp_file.name)
-            
-            # Add document to system
-            result = retrieval_system.add_document(temp_file.name)
-            if result.success:
-                print(f"✅ Added document: {content[:50]}...")
+
+    print("\n=== Multimodal Retrieval System (Terminal Mode) ===")
+    print("Type your question and press Enter. Type 'exit' to quit.\n")
+
+    while True:
+        user_query = input("Your question: ").strip()
+        if user_query.lower() in ("exit", "quit"): 
+            print("Exiting retrieval system.")
+            break
+        if not user_query:
+            continue
+
+        print("\nSearching for relevant information...")
+        try:
+            results = retrieval_system.query_with_response(user_query, top_k=5)
+            if results["search_results"]:
+                print("\nTop Results:")
+                for i, result in enumerate(results["search_results"]):
+                    print(f"  {i+1}. {result['content'][:120]} (score: {result['similarity_score']:.3f})")
             else:
-                print(f"❌ Failed to add document: {result.error_message}")
-        
-        # Test search functionality
-        print("\n🔎 Testing search functionality:")
-        
-        queries = [
-            "Which project helps with mental health?",
-            "What is the financial assistant called?",
-            "Tell me about vector search engines"
-        ]
-        
-        for query in queries:
-            print(f"\nQuery: {query}")
-            results = retrieval_system.query_with_response(query, top_k=2)
-            
-            for i, result in enumerate(results["search_results"]):
-                print(f"  {i+1}. {result['content'][:100]}... (score: {result['similarity_score']:.3f})")
-            
+                print("No relevant results found.")
+
             if "response" in results:
-                print(f"  Response: {results['response']['text'][:200]}...")
-        
-        # Get system statistics
-        print(f"\n📊 System Statistics:")
-        stats = retrieval_system.get_system_stats()
-        print(f"  - Total documents: {stats.get('vector_store', {}).get('points_count', 0)}")
-        print(f"  - Vector dimension: {stats.get('vector_store', {}).get('vector_size', 0)}")
-        print(f"  - Embeddings generated: {stats.get('embedding_generator', {}).get('total_embeddings', 0)}")
-    
-    finally:
-        # Clean up temporary files
-        for temp_file in temp_files:
-            try:
-                os.unlink(temp_file)
-            except:
-                pass
+                print("\nGenerated Answer:")
+                print(results["response"]["text"])
+                print(f"Confidence: {results['response']['confidence_score']:.2f}")
+                if results["response"]["citations"]:
+                    print("Citations:")
+                    for c in results["response"]["citations"]:
+                        print(f"  [{c['id']}] {c['source']} (score: {c['relevance_score']:.2f})")
+            print("\n---\n")
+        except Exception as e:
+            print(f"Error during retrieval: {e}")
 
 
 if __name__ == "__main__":
-    create_retrieval_system_example()
+    interactive_terminal_retrieval()
