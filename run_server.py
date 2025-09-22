@@ -40,6 +40,7 @@ def main():
         
         # Import and start
         print("\n🏗️ Starting server...")
+        import uvicorn
         from src.api.main import app
         
         print("✅ Server ready!")

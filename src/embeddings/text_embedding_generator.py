@@ -92,19 +92,6 @@ class SentenceTransformerEmbeddingGenerator(TextEmbeddingGenerator):
                 device=self.device
             )
             
-            # Validate embedding dimension
-            test_embedding = self.model.encode("test", convert_to_numpy=True)
-            actual_dimension = test_embedding.shape[0]
-            
-            if actual_dimension != self.config.embedding_dimension:
-                logger.warning(
-                    f"Model embedding dimension ({actual_dimension}) differs from "
-                    f"configured dimension ({self.config.embedding_dimension}). "
-                    f"Updating configuration."
-                )
-                self.embedding_dimension = actual_dimension
-                self.config.embedding_dimension = actual_dimension
-            
             # Set model to evaluation mode for consistency
             self.model.eval()
             
@@ -118,6 +105,28 @@ class SentenceTransformerEmbeddingGenerator(TextEmbeddingGenerator):
             error_msg = f"Failed to load text embedding model '{self.config.text_model_name}': {str(e)}"
             logger.error(error_msg)
             raise ModelLoadError(error_msg, cause=e)
+    
+    def _validate_and_update_dimension(self, embedding: np.ndarray) -> None:
+        """
+        Validate and potentially update embedding dimension based on actual model output.
+        
+        Args:
+            embedding: Sample embedding from the model
+        """
+        actual_dimension = embedding.shape[0]
+        
+        if actual_dimension != self.config.embedding_dimension:
+            logger.warning(
+                f"Model embedding dimension ({actual_dimension}) differs from "
+                f"configured dimension ({self.config.embedding_dimension}). "
+                f"Updating configuration."
+            )
+            self.embedding_dimension = actual_dimension
+            self.config.embedding_dimension = actual_dimension
+            
+            # Update embedding processor dimension too
+            if hasattr(self, 'embedding_processor'):
+                self.embedding_processor = EmbeddingProcessor(actual_dimension, self.device)
     
     def encode_text(self, text: str) -> np.ndarray:
         """
@@ -160,8 +169,14 @@ class SentenceTransformerEmbeddingGenerator(TextEmbeddingGenerator):
                 show_progress_bar=False
             )
             
+            # On first use, validate and potentially update dimension
+            if self._embedding_stats['total_embeddings'] == 0:
+                self._validate_and_update_dimension(embedding)
+            
             # Validate embedding
-            self.embedding_processor.validate_embedding(embedding)
+            if not self._validate_embedding(embedding):
+                logger.warning("Generated invalid embedding, returning zero vector")
+                embedding = np.zeros(self.embedding_dimension, dtype=np.float32)
             
             # Normalize if configured
             embedding = self.normalize_embedding(embedding)
@@ -252,15 +267,17 @@ class SentenceTransformerEmbeddingGenerator(TextEmbeddingGenerator):
                         batch_size=len(batch_texts)
                     )
                     
+                    # On first use, validate and potentially update dimension
+                    if self._embedding_stats['total_embeddings'] == 0 and len(batch_embeddings) > 0:
+                        self._validate_and_update_dimension(batch_embeddings[0])
+                    
                     # Process each embedding in the batch
                     for j, (embedding, original_idx, content_hash) in enumerate(
                         zip(batch_embeddings, batch_indices, batch_hashes)
                     ):
                         # Validate embedding
-                        try:
-                            self.embedding_processor.validate_embedding(embedding)
-                        except Exception as e:
-                            logger.warning(f"Invalid embedding generated for text at index {original_idx}: {e}")
+                        if not self._validate_embedding(embedding):
+                            logger.warning(f"Invalid embedding generated for text at index {original_idx}")
                             embedding = np.zeros(self.embedding_dimension, dtype=np.float32)
                         else:
                             # Normalize if configured
@@ -295,8 +312,36 @@ class SentenceTransformerEmbeddingGenerator(TextEmbeddingGenerator):
         cache_key = f"{self.config.text_model_name}:{content}:{self.config.normalize_embeddings}"
         return hashlib.sha256(cache_key.encode()).hexdigest()
     
+    def _validate_embedding(self, embedding: np.ndarray) -> bool:
+        """
+        Validate embedding for correctness.
+        
+        Args:
+            embedding: Embedding vector to validate
+            
+        Returns:
+            True if embedding is valid, False otherwise
+        """
+        if embedding is None:
+            return False
+        
+        if not isinstance(embedding, np.ndarray):
+            return False
+        
+        if embedding.shape[0] != self.embedding_dimension:
+            return False
+        
+        if np.isnan(embedding).any():
+            return False
+        
+        if np.isinf(embedding).any():
+            return False
+        
+        if np.allclose(embedding, 0):
+            return False
+        
+        return True
 
-    
     def get_embedding_stats(self) -> Dict[str, Any]:
         """
         Get performance statistics for the embedding generator.

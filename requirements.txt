@@ -50,9 +50,7 @@ pathlib2>=2.3.0; python_version < "3.4"
 dataclasses>=0.6; python_version < "3.7"
 typing-extensions>=4.0.0
 
-# Development and testing
-pytest>=7.0.0
-pytest-asyncio>=0.20.0
+# Development tools
 black>=22.0.0
 flake8>=4.0.0
 mypy>=0.950

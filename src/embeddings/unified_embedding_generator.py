@@ -298,10 +298,11 @@ class UnifiedEmbeddingGenerator(MultimodalEmbeddingGenerator):
         Raises:
             EmbeddingError: If embedding generation fails
         """
-        if content_type == ContentType.TEXT:
+        if content_type in [ContentType.TEXT, ContentType.PDF, ContentType.DOCX]:
             return self.encode_text(content)
         elif content_type == ContentType.IMAGE:
-            return self.encode_image(content)
+            # For image content, we encode the descriptive text
+            return self.encode_text(content)
         elif content_type == ContentType.AUDIO:
             return self.encode_audio(content)
         else:
@@ -360,7 +361,7 @@ class UnifiedEmbeddingGenerator(MultimodalEmbeddingGenerator):
     
     def get_supported_content_types(self) -> List[ContentType]:
         """Get list of supported content types."""
-        return [ContentType.TEXT, ContentType.IMAGE, ContentType.AUDIO]
+        return [ContentType.TEXT, ContentType.PDF, ContentType.DOCX, ContentType.IMAGE, ContentType.AUDIO]
     
     def get_embedding_stats(self) -> Dict[str, Any]:
         """

@@ -34,8 +34,6 @@ setup(
     extras_require={
         "gpu": ["faiss-gpu>=1.7.0"],
         "dev": [
-            "pytest>=7.0.0",
-            "pytest-asyncio>=0.21.0",
             "black>=23.0.0",
             "flake8>=5.0.0",
             "mypy>=1.0.0",

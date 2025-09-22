@@ -78,18 +78,18 @@ class MultimodalRetrievalSystem:
         # Register Image processor
         try:
             from ..processors.image_processor import ImageProcessor
-            self.document_router.register_processor(ImageProcessor, ['png', 'jpg', 'jpeg'])
+            self.document_router.register_processor(ImageProcessor, ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff'])
             logger.info("Registered ImageProcessor")
-        except ImportError:
-            logger.warning("ImageProcessor not available")
+        except ImportError as e:
+            logger.warning(f"ImageProcessor not available: {e}")
         
         # Register Audio processor
         try:
             from ..processors.audio_processor import AudioProcessor
-            self.document_router.register_processor(AudioProcessor, ['mp3', 'wav', 'm4a'])
+            self.document_router.register_processor(AudioProcessor, ['mp3', 'wav', 'm4a', 'flac', 'ogg'])
             logger.info("Registered AudioProcessor")
-        except ImportError:
-            logger.warning("AudioProcessor not available")
+        except ImportError as e:
+            logger.warning(f"AudioProcessor not available: {e}")
     
     def add_document(self, file_path: str, document_id: Optional[str] = None) -> ProcessingResult:
         """

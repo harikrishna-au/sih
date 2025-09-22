@@ -65,6 +65,8 @@ def create_app(config: Optional[SystemConfig] = None) -> FastAPI:
     app.include_router(search.router, prefix="/api/v1/search", tags=["search"])
     app.include_router(generation.router, prefix="/api/v1/generate", tags=["generation"])
     
+
+    
     @app.get("/")
     async def root():
         """Root endpoint providing API information."""

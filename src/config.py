@@ -69,6 +69,15 @@ Answer:"""
 @dataclass
 class StorageConfig:
     """Configuration for vector storage and indexing."""
+    # Qdrant configuration
+    qdrant_host: str = "localhost"
+    qdrant_port: int = 6333
+    qdrant_grpc_port: int = 6334
+    qdrant_api_key: Optional[str] = None
+    qdrant_use_https: bool = False
+    collection_name: str = "multimodal_rag"
+    
+    # Legacy FAISS configuration (kept for compatibility)
     index_type: str = "IVFFlat"  # IVFFlat, HNSW, Flat
     index_params: Dict[str, Any] = field(default_factory=lambda: {
         "nlist": 100,  # For IVF indices

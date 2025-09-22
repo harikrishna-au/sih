@@ -26,8 +26,9 @@ class DOCXValidator:
     
     def __init__(self):
         """Initialize DOCX validator."""
+        self.docx_available = DOCX_AVAILABLE
         if not DOCX_AVAILABLE:
-            raise ImportError("python-docx is required for DOCX processing. Install with: pip install python-docx>=0.8.11")
+            logger.warning("python-docx not available. DOCX processing will be limited.")
     
     def validate_file(self, file_path: str) -> ValidationResult:
         """
@@ -68,6 +69,13 @@ class DOCXValidator:
                 )
             
             # Try to open and read the document
+            if not self.docx_available:
+                return ValidationResult(
+                    is_valid=False,
+                    error_message="python-docx is required for DOCX processing. Install with: pip install python-docx>=0.8.11",
+                    file_path=file_path
+                )
+            
             try:
                 doc = Document(file_path)
                 

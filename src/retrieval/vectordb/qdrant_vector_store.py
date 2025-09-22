@@ -52,12 +52,17 @@ class QdrantVectorStore:
         self.storage_config = storage_config
         self.embedding_config = embedding_config
         
-        # Initialize Qdrant client with local storage
-        self.db_path = Path(storage_config.storage_directory) / "qdrant_db"
-        self.client = QdrantClient(path=str(self.db_path))
+        # Initialize Qdrant client with remote connection
+        self.client = QdrantClient(
+            host=storage_config.qdrant_host,
+            port=storage_config.qdrant_port,
+            grpc_port=storage_config.qdrant_grpc_port,
+            api_key=storage_config.qdrant_api_key,
+            https=storage_config.qdrant_use_https
+        )
         
         # Collection name for unified embeddings
-        self.collection_name = "multimodal_knowledge_base"
+        self.collection_name = storage_config.collection_name
         
         # Initialize embedding generator
         self.embedding_generator = UnifiedEmbeddingGenerator(embedding_config)
@@ -65,7 +70,7 @@ class QdrantVectorStore:
         # Create collection if it doesn't exist
         self._ensure_collection_exists()
         
-        logger.info(f"QdrantVectorStore initialized with database at: {self.db_path}")
+        logger.info(f"QdrantVectorStore initialized with remote connection to {storage_config.qdrant_host}:{storage_config.qdrant_port}")
     
     def _ensure_collection_exists(self) -> None:
         """Create collection if it doesn't exist."""
@@ -111,7 +116,19 @@ class QdrantVectorStore:
             chunks_to_embed = [chunk for chunk in chunks if chunk.embedding is None]
             if chunks_to_embed:
                 logger.info(f"Generating embeddings for {len(chunks_to_embed)} chunks")
-                self.embedding_generator.embed_chunks(chunks_to_embed)
+                for chunk in chunks_to_embed:
+                    try:
+                        logger.info(f"Generating embedding for chunk {chunk.chunk_id} with content type {chunk.content_type}")
+                        chunk.embedding = self.embedding_generator.generate_embedding(
+                            chunk.content, chunk.content_type
+                        )
+                        logger.info(f"Generated embedding for chunk {chunk.chunk_id}: shape {chunk.embedding.shape}, sum={chunk.embedding.sum():.4f}")
+                    except Exception as e:
+                        logger.error(f"Failed to generate embedding for chunk {chunk.chunk_id}: {e}")
+                        import traceback
+                        logger.error(traceback.format_exc())
+                        # Set a zero embedding as fallback
+                        chunk.embedding = np.zeros(self.embedding_config.embedding_dimension, dtype=np.float32)
             
             # Prepare points for insertion
             points = []
@@ -224,13 +241,20 @@ class QdrantVectorStore:
                     timestamp_end=payload.get("timestamp_end")
                 )
                 
-                # Create retrieval result
+                # Create retrieval result with proper content type handling
+                content_type_str = payload.get("content_type", "text")
+                try:
+                    content_type = ContentType(content_type_str)
+                except ValueError:
+                    # Fallback for unknown content types
+                    content_type = ContentType.TEXT
+                
                 result = RetrievalResult(
                     chunk_id=payload.get("chunk_id", ""),
                     content=payload.get("content", ""),
                     similarity_score=float(hit.score),
                     source_location=source_location,
-                    content_type=ContentType(payload.get("content_type", "text")),
+                    content_type=content_type,
                     metadata=payload.get("metadata", {}),
                     relevance_score=float(hit.score)  # Use similarity as relevance
                 )
@@ -303,12 +327,19 @@ class QdrantVectorStore:
                     timestamp_end=payload.get("timestamp_end")
                 )
                 
+                # Handle content type properly
+                content_type_str = payload.get("content_type", "text")
+                try:
+                    content_type = ContentType(content_type_str)
+                except ValueError:
+                    content_type = ContentType.TEXT
+                
                 result = RetrievalResult(
                     chunk_id=payload.get("chunk_id", ""),
                     content=payload.get("content", ""),
                     similarity_score=float(hit.score),
                     source_location=source_location,
-                    content_type=ContentType(payload.get("content_type", "text")),
+                    content_type=content_type,
                     metadata=payload.get("metadata", {}),
                     relevance_score=float(hit.score)
                 )
@@ -385,7 +416,8 @@ class QdrantVectorStore:
                 "vector_size": collection_info.config.params.vectors.size,
                 "distance_metric": collection_info.config.params.vectors.distance,
                 "status": collection_info.status,
-                "database_path": str(self.db_path)
+                "qdrant_host": self.storage_config.qdrant_host,
+                "qdrant_port": self.storage_config.qdrant_port
             }
             
         except Exception as e:

@@ -72,9 +72,17 @@ def get_document_processor():
         
         try:
             from ..processors.image_processor import ImageProcessor
-            document_router.register_processor(ImageProcessor, ['png', 'jpg', 'jpeg'])
-        except ImportError:
-            logger.debug("ImageProcessor not available")
+            document_router.register_processor(ImageProcessor, ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff'])
+            logger.info("Registered ImageProcessor")
+        except ImportError as e:
+            logger.warning(f"ImageProcessor not available: {e}")
+        
+        try:
+            from ..processors.audio_processor import AudioProcessor
+            document_router.register_processor(AudioProcessor, ['mp3', 'wav', 'm4a', 'flac', 'ogg'])
+            logger.info("Registered AudioProcessor")
+        except ImportError as e:
+            logger.warning(f"AudioProcessor not available: {e}")
         
         class RealDocumentProcessor:
             """Real document processor using DocumentRouter."""
@@ -127,34 +135,8 @@ def get_document_processor():
         return RealDocumentProcessor(document_router)
         
     except Exception as e:
-        logger.warning(f"Could not initialize real document processor: {e}")
-        logger.info("Falling back to mock document processor")
-        
-        # Fallback to mock implementation
-        class MockDocumentProcessor:
-            """Mock document processor for API development."""
-            
-            async def process_file(self, file_path: str) -> ProcessingResult:
-                """Mock file processing."""
-                await asyncio.sleep(0.1)  # Simulate processing time
-                return ProcessingResult(
-                    success=True,
-                    processing_time=0.1,
-                    chunks_created=5
-                )
-            
-            def validate_file(self, file_path: str, file_size: int) -> bool:
-                """Mock file validation."""
-                config = get_config()
-                max_size_bytes = config.processing.max_file_size_mb * 1024 * 1024
-                return file_size <= max_size_bytes
-            
-            def get_supported_formats(self) -> list:
-                """Get supported file formats."""
-                config = get_config()
-                return config.processing.supported_formats
-        
-        return MockDocumentProcessor()
+        logger.error(f"CRITICAL: Could not initialize real document processor: {e}")
+        raise RuntimeError(f"Document processor initialization failed: {e}")
 
 def get_batch_processor():
     """
@@ -215,41 +197,53 @@ def get_batch_processor():
         return RealBatchProcessor(batch_processor)
         
     except Exception as e:
-        logger.warning(f"Could not initialize real batch processor: {e}")
-        logger.info("Falling back to mock batch processor")
+        logger.error(f"CRITICAL: Could not initialize real batch processor: {e}")
+        logger.error("Batch processing will NOT work properly!")
         
-        # Fallback to mock implementation
-        class MockBatchProcessor:
-            """Mock batch processor for API development."""
+        # Use document processor for batch processing as fallback
+        class SimpleBatchProcessor:
+            """Simple batch processor using document processor."""
             
             async def process_files(self, file_paths: list, job_id: str) -> BatchProcessingStatus:
-                """Mock batch processing."""
+                """Process files one by one using document processor."""
+                document_processor = get_document_processor()
+                
                 status = BatchProcessingStatus(
                     total_files=len(file_paths),
                     processed_files=0,
                     failed_files=0,
-                    current_file=file_paths[0] if file_paths else None,
+                    current_file=None,
                     start_time=time.time(),
-                    status="processing"
+                    status="processing",
+                    errors=[]
                 )
                 
-                # Simulate processing
                 for i, file_path in enumerate(file_paths):
-                    await asyncio.sleep(0.1)  # Simulate processing time
-                    status.processed_files = i + 1
-                    status.current_file = file_path
+                    try:
+                        status.current_file = file_path
+                        result = await document_processor.process_file(file_path)
+                        
+                        if result.success:
+                            status.processed_files += 1
+                        else:
+                            status.failed_files += 1
+                            status.errors.append(f"{file_path}: {result.error_message}")
+                            
+                    except Exception as e:
+                        status.failed_files += 1
+                        status.errors.append(f"{file_path}: {str(e)}")
                 
-                status.status = "completed"
+                status.status = "completed" if status.failed_files == 0 else "failed"
                 return status
         
-        return MockBatchProcessor()
+        return SimpleBatchProcessor()
 
 def get_semantic_retriever():
     """
-    Get semantic retriever instance using shared retrieval system.
+    Get semantic retriever instance using the singleton retrieval system.
     """
     try:
-        # Use the shared retrieval system instance
+        # Use the shared retrieval system singleton
         retrieval_system = get_retrieval_system()
         
         class RealSemanticRetriever:
@@ -265,6 +259,8 @@ def get_semantic_retriever():
                     similarity_threshold = kwargs.get('similarity_threshold', 0.5)
                     content_types = kwargs.get('content_types', None)
                     
+                    logger.info(f"Performing real search for: '{query}' with threshold {similarity_threshold}")
+                    
                     # Perform search using the retrieval system
                     results = self.retrieval_system.search(
                         query=query,
@@ -273,70 +269,18 @@ def get_semantic_retriever():
                         similarity_threshold=similarity_threshold
                     )
                     
+                    logger.info(f"Real search returned {len(results)} results")
                     return results
                     
                 except Exception as e:
                     logger.error(f"Error in real semantic search: {e}")
-                    # Fall back to mock results if real search fails
-                    return await self._mock_search(query, k)
-            
-            async def _mock_search(self, query: str, k: int):
-                """Fallback mock search if real search fails."""
-                await asyncio.sleep(0.1)
-                
-                from ..models import RetrievalResult, SourceLocation, ContentType
-                
-                results = []
-                for i in range(min(k, 3)):
-                    result = RetrievalResult(
-                        chunk_id=f"chunk_{i}",
-                        content=f"Fallback content for query '{query}' - result {i+1}",
-                        similarity_score=0.9 - (i * 0.1),
-                        source_location=SourceLocation(
-                            file_path=f"fallback_document_{i}.pdf",
-                            page_number=i + 1
-                        ),
-                        content_type=ContentType.TEXT,
-                        relevance_score=0.85 - (i * 0.1)
-                    )
-                    results.append(result)
-                
-                return results
+                    return []  # Return empty list on error instead of None
         
         return RealSemanticRetriever(retrieval_system)
         
     except Exception as e:
-        logger.warning(f"Could not initialize real semantic retriever: {e}")
-        logger.info("Falling back to mock semantic retriever")
-        
-        # Fallback to mock implementation
-        class MockSemanticRetriever:
-            """Mock semantic retriever for API development."""
-            
-            async def search(self, query: str, k: int = 10, **kwargs):
-                """Mock semantic search."""
-                await asyncio.sleep(0.1)
-                
-                from ..models import RetrievalResult, SourceLocation, ContentType
-                
-                results = []
-                for i in range(min(k, 3)):
-                    result = RetrievalResult(
-                        chunk_id=f"chunk_{i}",
-                        content=f"Mock content for query '{query}' - result {i+1}",
-                        similarity_score=0.9 - (i * 0.1),
-                        source_location=SourceLocation(
-                            file_path=f"mock_document_{i}.pdf",
-                            page_number=i + 1
-                        ),
-                        content_type=ContentType.TEXT,
-                        relevance_score=0.85 - (i * 0.1)
-                    )
-                    results.append(result)
-                
-                return results
-        
-        return MockSemanticRetriever()
+        logger.error(f"CRITICAL: Could not initialize semantic retriever: {e}")
+        raise RuntimeError(f"Semantic retriever initialization failed: {e}")
 
 def get_llm_engine():
     """
@@ -401,33 +345,8 @@ def get_llm_engine():
         return RealLLMEngine(llm_engine)
         
     except Exception as e:
-        logger.warning(f"Could not initialize real LLM engine: {e}")
-        logger.info("Falling back to mock LLM engine")
-        
-        # Fallback to mock implementation
-        class MockLLMEngine:
-            """Mock LLM engine for API development."""
-            
-            async def generate_response(self, context: list, question: str, **kwargs) -> str:
-                """Mock response generation."""
-                await asyncio.sleep(0.5)  # Simulate generation time
-                return f"Mock answer to: {question}. Based on the provided context, this is a generated response with citations [1] [2]."
-            
-            def get_model_info(self) -> dict:
-                """Get model information."""
-                return {
-                    "model_name": "mock-llm",
-                    "version": "1.0.0",
-                    "context_length": 4096,
-                    "quantization": "4bit",
-                    "loaded": False
-                }
-            
-            def is_model_loaded(self) -> bool:
-                """Check if model is loaded."""
-                return False
-        
-        return MockLLMEngine()
+        logger.error(f"CRITICAL: Could not initialize LLM engine: {e}")
+        raise RuntimeError(f"LLM engine initialization failed: {e}")
 
 def get_citation_manager():
     """
@@ -488,38 +407,8 @@ def get_citation_manager():
         return RealCitationManager(citation_manager)
         
     except Exception as e:
-        logger.warning(f"Could not initialize real citation manager: {e}")
-        logger.info("Falling back to mock citation manager")
-        
-        # Fallback to mock implementation
-        class MockCitationManager:
-            """Mock citation manager for API development."""
-            
-            def extract_citations(self, response: str, retrieval_results: list) -> list:
-                """Mock citation extraction."""
-                from ..models import Citation
-                import re
-                
-                citations = []
-                citation_pattern = re.compile(r'\[(\d+)\]')
-                citation_numbers = citation_pattern.findall(response)
-                
-                for i, citation_num in enumerate(set(citation_numbers)):
-                    if i < len(retrieval_results):
-                        result = retrieval_results[i]
-                        citation = Citation(
-                            citation_id=int(citation_num),
-                            source_file=result.source_location.file_path,
-                            location=result.source_location,
-                            excerpt=result.content[:100] + "..." if len(result.content) > 100 else result.content,
-                            relevance_score=result.relevance_score,
-                            content_type=result.content_type
-                        )
-                        citations.append(citation)
-                
-                return citations
-        
-        return MockCitationManager()
+        logger.error(f"CRITICAL: Could not initialize citation manager: {e}")
+        raise RuntimeError(f"Citation manager initialization failed: {e}")
 
 def get_response_generator():
     """
@@ -537,72 +426,9 @@ def get_response_generator():
         
         return response_generator
         
-    except ImportError as e:
-        logger.warning(f"Could not import LLM components: {e}. Using mock implementation.")
-        
-        # Mock implementation for development
-        class MockResponseGenerator:
-            """Mock response generator for API development."""
-            
-            def __init__(self):
-                self.llm_engine = get_llm_engine()
-            
-            def generate_grounded_response(self, query: str, retrieval_results: list, **kwargs):
-                """Mock grounded response generation."""
-                from ..models import GroundedResponse, Citation, SourceLocation, ContentType
-                
-                # Generate mock response
-                response_text = f"Mock grounded response to: {query}. Based on {len(retrieval_results)} sources [1] [2]."
-                
-                # Create mock citations
-                citations = []
-                for i, result in enumerate(retrieval_results[:2]):
-                    citation = Citation(
-                        citation_id=i + 1,
-                        source_file=result.source_location.file_path,
-                        location=result.source_location,
-                        excerpt=result.content[:100] + "...",
-                        relevance_score=result.relevance_score,
-                        content_type=result.content_type
-                    )
-                    citations.append(citation)
-                
-                return GroundedResponse(
-                    response_text=response_text,
-                    citations=citations,
-                    confidence_score=0.85,
-                    retrieval_results=retrieval_results,
-                    query=query,
-                    generation_metadata={
-                        "generation_time": 0.5,
-                        "context_length": sum(len(r.content) for r in retrieval_results),
-                        "num_sources": len(retrieval_results),
-                        "citations_found": len(citations),
-                        "quality_score": 0.85,
-                        "model_info": {"model_name": "mock-llm", "version": "1.0.0"}
-                    }
-                )
-            
-            def validate_response(self, grounded_response, min_quality_threshold=0.5):
-                """Mock response validation."""
-                return True, []
-            
-            def _calculate_response_quality(self, response_text, context, query, retrieval_results):
-                """Mock quality calculation."""
-                return 0.85
-            
-            def improve_response_quality(self, query, retrieval_results, initial_response, max_attempts=2):
-                """Mock response improvement."""
-                # Return slightly improved response
-                improved_response = initial_response
-                improved_response.confidence_score = min(1.0, initial_response.confidence_score + 0.1)
-                return improved_response
-        
-        return MockResponseGenerator()
-    
     except Exception as e:
-        logger.error(f"Error creating response generator: {e}")
-        raise RuntimeError(f"Failed to initialize response generator: {e}")
+        logger.error(f"CRITICAL: Could not initialize response generator: {e}")
+        raise RuntimeError(f"Response generator initialization failed: {e}")
 
 async def verify_system_health():
     """Verify that all system components are healthy."""

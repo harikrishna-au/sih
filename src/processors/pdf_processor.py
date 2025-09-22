@@ -302,7 +302,7 @@ class PDFProcessor(DocumentProcessor):
                     chunk_id=chunk_id,
                     document_id=document_id,
                     content=chunk_text.strip(),
-                    content_type=ContentType.PDF,
+                    content_type=ContentType.TEXT,
                     source_location=source_location,
                     metadata={
                         'page_number': page_num,
