@@ -17,7 +17,7 @@ from ..models import (
 from ..config import SystemConfig
 from ..processors.router import DocumentRouter
 from ..embeddings.unified_embedding_generator import UnifiedEmbeddingGenerator
-from .vectordb import QdrantVectorStore
+from .vectordb.qdrant_vector_store import QdrantVectorStore
 
 
 logger = logging.getLogger(__name__)
@@ -49,10 +49,47 @@ class MultimodalRetrievalSystem:
         self.embedding_generator = UnifiedEmbeddingGenerator(config.embedding)
         self.vector_store = QdrantVectorStore(config.storage, config.embedding)
         
+        # Register processors with the document router
+        self._register_processors()
+        
         # Load embedding model
         self.embedding_generator.load_model()
         
         logger.info("MultimodalRetrievalSystem initialized successfully")
+    
+    def _register_processors(self):
+        """Register document processors with the document router."""
+        # Register PDF processor
+        try:
+            from ..processors.pdf_processor import PDFProcessor
+            self.document_router.register_processor(PDFProcessor, ['pdf'])
+            logger.info("Registered PDFProcessor")
+        except ImportError:
+            logger.warning("PDFProcessor not available")
+        
+        # Register DOCX processor
+        try:
+            from ..processors.docx_processor import DOCXProcessor
+            self.document_router.register_processor(DOCXProcessor, ['docx'])
+            logger.info("Registered DOCXProcessor")
+        except ImportError:
+            logger.warning("DOCXProcessor not available")
+        
+        # Register Image processor
+        try:
+            from ..processors.image_processor import ImageProcessor
+            self.document_router.register_processor(ImageProcessor, ['png', 'jpg', 'jpeg'])
+            logger.info("Registered ImageProcessor")
+        except ImportError:
+            logger.warning("ImageProcessor not available")
+        
+        # Register Audio processor
+        try:
+            from ..processors.audio_processor import AudioProcessor
+            self.document_router.register_processor(AudioProcessor, ['mp3', 'wav', 'm4a'])
+            logger.info("Registered AudioProcessor")
+        except ImportError:
+            logger.warning("AudioProcessor not available")
     
     def add_document(self, file_path: str, document_id: Optional[str] = None) -> ProcessingResult:
         """

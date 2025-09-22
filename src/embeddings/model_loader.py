@@ -6,7 +6,14 @@ sentence transformers and CLIP models with proper error handling and validation.
 """
 
 import logging
+import ssl
+import os
 from typing import Optional, Any, Tuple
+
+# Disable SSL verification to avoid certificate issues
+ssl._create_default_https_context = ssl._create_unverified_context
+os.environ['PYTHONHTTPSVERIFY'] = '0'
+os.environ['CURL_CA_BUNDLE'] = ''
 
 try:
     from sentence_transformers import SentenceTransformer

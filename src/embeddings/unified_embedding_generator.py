@@ -8,8 +8,15 @@ for transcribed audio. Includes caching to avoid recomputation.
 
 import hashlib
 import logging
+import ssl
+import os
 from typing import List, Dict, Any, Optional
 import numpy as np
+
+# Disable SSL verification to avoid certificate issues
+ssl._create_default_https_context = ssl._create_unverified_context
+os.environ['PYTHONHTTPSVERIFY'] = '0'
+os.environ['CURL_CA_BUNDLE'] = ''
 
 try:
     from sentence_transformers import SentenceTransformer

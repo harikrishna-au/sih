@@ -6,6 +6,7 @@ scipy>=1.7.0
 PyPDF2>=2.0.0
 python-docx>=0.8.11
 Pillow>=8.0.0
+PyMuPDF>=1.23.0
 
 # OCR and image processing
 pytesseract>=0.3.8

@@ -67,22 +67,96 @@ class ResultReranker:
     
     def _cross_encoder_rerank(self, results: List[RetrievalResult], query: str) -> List[RetrievalResult]:
         """
-        Rerank using cross-encoder approach (simulated).
+        Rerank using cross-encoder approach.
         
-        In a full implementation, this would use a trained cross-encoder model
-        to score query-document pairs directly.
+        Uses a cross-encoder model to score query-document pairs directly
+        for more accurate relevance scoring.
         """
-        scored_results = []
+        
+        try:
+            # Try to use a real cross-encoder model
+            from sentence_transformers import CrossEncoder
+            
+            # Initialize cross-encoder model (you can change this to your preferred model)
+            if not hasattr(self, '_cross_encoder'):
+                try:
+                    self._cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
+                    logger.info("Loaded cross-encoder model for reranking")
+                except Exception as e:
+                    logger.warning(f"Could not load cross-encoder model: {e}")
+                    self._cross_encoder = None
+            
+            if self._cross_encoder:
+                # Prepare query-document pairs
+                pairs = [(query, result.content) for result in results]
+                
+                # Get cross-encoder scores
+                scores = self._cross_encoder.predict(pairs)
+                
+                # Update relevance scores
+                for result, score in zip(results, scores):
+                    # Normalize score to 0-1 range and combine with similarity
+                    normalized_score = max(0.0, min(1.0, (score + 1) / 2))  # Convert from [-1,1] to [0,1]
+                    result.relevance_score = (
+                        result.similarity_score * 0.3 +  # Original similarity
+                        normalized_score * 0.7  # Cross-encoder score
+                    )
+                
+                logger.debug(f"Cross-encoder reranking completed for {len(results)} results")
+            else:
+                # Fallback to enhanced heuristic scoring
+                self._enhanced_heuristic_rerank(results, query)
+                
+        except ImportError:
+            logger.warning("sentence-transformers not available, using enhanced heuristic reranking")
+            self._enhanced_heuristic_rerank(results, query)
+        except Exception as e:
+            logger.error(f"Error in cross-encoder reranking: {e}")
+            self._enhanced_heuristic_rerank(results, query)
+        
+        return results
+    
+    def _enhanced_heuristic_rerank(self, results: List[RetrievalResult], query: str) -> None:
+        """Enhanced heuristic reranking when cross-encoder is not available."""
+        
+        query_words = set(query.lower().split())
         
         for result in results:
-            # Simulate cross-encoder scoring with multiple factors
-            cross_encoder_score = (
-                result.similarity_score * 0.7 +  # Base similarity
-                self.relevance_scorer.calculate_query_document_interaction(result, query) * 0.3
+            # Calculate enhanced relevance score with multiple factors
+            content_words = set(result.content.lower().split())
+            
+            # Word overlap factor
+            overlap = len(query_words.intersection(content_words))
+            overlap_score = overlap / max(len(query_words), 1)
+            
+            # Content length factor (prefer moderate length)
+            content_length = len(result.content.split())
+            length_score = 1.0 - abs(content_length - 100) / 200  # Optimal around 100 words
+            length_score = max(0.1, min(1.0, length_score))
+            
+            # Position factor (if available in metadata)
+            position_score = 1.0
+            if 'position' in result.metadata:
+                # Prefer earlier positions
+                position = result.metadata['position']
+                position_score = 1.0 / (1.0 + position * 0.1)
+            
+            # Combine with existing relevance scorer if available
+            if hasattr(self, 'relevance_scorer'):
+                interaction_score = self.relevance_scorer.calculate_query_document_interaction(result, query)
+            else:
+                interaction_score = overlap_score
+            
+            # Combine all factors
+            enhanced_score = (
+                result.similarity_score * 0.4 +  # Base similarity
+                overlap_score * 0.2 +           # Word overlap
+                length_score * 0.2 +            # Content length
+                position_score * 0.1 +          # Position preference
+                interaction_score * 0.1         # Query-document interaction
             )
             
-            # Update relevance score with cross-encoder result
-            result.relevance_score = (result.relevance_score + cross_encoder_score) / 2
+            result.relevance_score = min(1.0, enhanced_score)
             scored_results.append(result)
         
         return sorted(scored_results, key=lambda x: x.relevance_score, reverse=True)
