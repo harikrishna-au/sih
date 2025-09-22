@@ -177,3 +177,4 @@ class BatchProcessingStatus:
     start_time: Optional[float] = None
     estimated_completion: Optional[float] = None
     errors: List[str] = field(default_factory=list)
+    status: Optional[str] = None

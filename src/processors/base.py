@@ -113,7 +113,12 @@ class DocumentProcessor(ABC):
             
             # Generate document ID if not provided
             if document_id is None:
-                document_id = str(uuid.uuid4())
+                import hashlib
+                import time
+                # Create a simple, non-UUID document ID
+                timestamp = str(int(time.time()))
+                file_hash = hashlib.md5(file_path.encode()).hexdigest()[:8]
+                document_id = f"doc_{timestamp}_{file_hash}"
             
             # Extract content and metadata
             raw_content = self.extract_content(file_path)

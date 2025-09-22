@@ -21,6 +21,7 @@ except ImportError as e:
     ) from e
 
 from .base import TextEmbeddingGenerator, EmbeddingCache, ModelLoadError, EmbeddingError
+from .embedding_processors import EmbeddingProcessor
 from ..models import ContentType
 from ..config import EmbeddingConfig
 
@@ -47,6 +48,9 @@ class SentenceTransformerEmbeddingGenerator(TextEmbeddingGenerator):
             cache_dir=config.embedding_cache_dir,
             enabled=config.cache_embeddings
         )
+        
+        # Initialize embedding processor for validation
+        self.embedding_processor = EmbeddingProcessor(config.embedding_dimension, self.device)
         
         # Performance tracking
         self._embedding_stats = {
@@ -157,8 +161,7 @@ class SentenceTransformerEmbeddingGenerator(TextEmbeddingGenerator):
             )
             
             # Validate embedding
-            if not self._validate_embedding(embedding):
-                raise EmbeddingError(f"Invalid embedding generated for text: {text[:100]}...")
+            self.embedding_processor.validate_embedding(embedding)
             
             # Normalize if configured
             embedding = self.normalize_embedding(embedding)
@@ -254,8 +257,10 @@ class SentenceTransformerEmbeddingGenerator(TextEmbeddingGenerator):
                         zip(batch_embeddings, batch_indices, batch_hashes)
                     ):
                         # Validate embedding
-                        if not self._validate_embedding(embedding):
-                            logger.warning(f"Invalid embedding generated for text at index {original_idx}")
+                        try:
+                            self.embedding_processor.validate_embedding(embedding)
+                        except Exception as e:
+                            logger.warning(f"Invalid embedding generated for text at index {original_idx}: {e}")
                             embedding = np.zeros(self.embedding_dimension, dtype=np.float32)
                         else:
                             # Normalize if configured
@@ -290,39 +295,7 @@ class SentenceTransformerEmbeddingGenerator(TextEmbeddingGenerator):
         cache_key = f"{self.config.text_model_name}:{content}:{self.config.normalize_embeddings}"
         return hashlib.sha256(cache_key.encode()).hexdigest()
     
-    def _validate_embedding(self, embedding: np.ndarray) -> bool:
-        """
-        Validate that embedding is well-formed.
-        
-        Args:
-            embedding: Embedding vector to validate
-            
-        Returns:
-            True if embedding is valid, False otherwise
-        """
-        if embedding is None:
-            return False
-        
-        if not isinstance(embedding, np.ndarray):
-            return False
-        
-        if embedding.shape != (self.embedding_dimension,):
-            logger.warning(
-                f"Embedding dimension mismatch: expected {self.embedding_dimension}, "
-                f"got {embedding.shape}"
-            )
-            return False
-        
-        if np.isnan(embedding).any() or np.isinf(embedding).any():
-            logger.warning("Embedding contains NaN or infinite values")
-            return False
-        
-        # Check if embedding is all zeros (might indicate an issue)
-        if np.allclose(embedding, 0):
-            logger.warning("Embedding is all zeros")
-            return False
-        
-        return True
+
     
     def get_embedding_stats(self) -> Dict[str, Any]:
         """

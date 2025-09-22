@@ -69,7 +69,7 @@ class DocumentRouter:
         
         # Method 1: File extension (check against known formats)
         extension = path.suffix.lower().lstrip('.')
-        known_formats = ['pdf', 'docx', 'doc', 'png', 'jpg', 'jpeg', 'mp3', 'wav', 'm4a']
+        known_formats = ['pdf', 'docx', 'doc', 'txt', 'png', 'jpg', 'jpeg', 'mp3', 'wav', 'm4a']
         if extension in known_formats:
             return extension
         
@@ -203,6 +203,7 @@ class DocumentRouter:
             'application/pdf': 'pdf',
             'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
             'application/msword': 'doc',
+            'text/plain': 'txt',
             'image/png': 'png',
             'image/jpeg': 'jpg',
             'image/jpg': 'jpg',

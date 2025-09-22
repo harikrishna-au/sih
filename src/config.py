@@ -18,7 +18,7 @@ class ProcessingConfig:
     chunk_overlap: int = 50
     max_file_size_mb: int = 100
     supported_formats: List[str] = field(default_factory=lambda: [
-        'pdf', 'docx', 'png', 'jpg', 'jpeg', 'mp3', 'wav', 'm4a'
+        'pdf', 'docx', 'txt', 'png', 'jpg', 'jpeg', 'mp3', 'wav', 'm4a'
     ])
     batch_size: int = 10
     max_concurrent_files: int = 4
@@ -33,6 +33,7 @@ class EmbeddingConfig:
     """Configuration for embedding generation."""
     text_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
     image_model_name: str = "openai/clip-vit-base-patch32"
+    clip_model_name: str = "ViT-B/32"
     embedding_dimension: int = 384
     batch_size: int = 32
     normalize_embeddings: bool = True

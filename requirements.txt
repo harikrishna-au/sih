@@ -1,20 +1,26 @@
+
 # Core dependencies for multimodal RAG system
 numpy
 scipy
+
 
 # Document processing
 PyPDF2
 python-docx
 Pillow
+PyMuPDF
+
 
 # OCR and image processing
 pytesseract
 opencv-python
 
+
 # Audio processing
 openai-whisper
 librosa
 soundfile
+
 
 # Embeddings and ML
 torch
@@ -24,26 +30,36 @@ sentence-transformers
 transformers
 clip-by-openai
 
-# Vector indexing
+
+# Vector database
+qdrant-client
 faiss-cpu
+
 
 # LLM integration
 llama-cpp-python
+
 
 # API framework
 fastapi
 uvicorn
 pydantic
 
+
 # Database and storage
 # sqlite3 is built-in with Python
 sqlalchemy
+
 
 # Utilities
 tqdm
 click
 pyyaml
 python-multipart
+pathlib2; python_version < "3.4"
+dataclasses; python_version < "3.7"
+typing-extensions
+
 
 # Development and testing
 pytest
@@ -52,6 +68,23 @@ black
 flake8
 mypy
 
-# Optional GPU support (uncomment if using CUDA)
+
+# Optional dependencies for enhanced functionality
+# Uncomment these for additional features:
+
+# GPU support (uncomment if using CUDA)
 # faiss-gpu
 # torch
+
+# Additional ML libraries
+# scikit-learn
+# matplotlib
+# seaborn
+
+# Production deployment
+# gunicorn
+# redis
+
+# Monitoring and logging
+# prometheus-client
+# structlog
